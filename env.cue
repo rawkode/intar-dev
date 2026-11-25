@@ -192,16 +192,19 @@ schema.#Project & {
 			"""}
 
 		// Cached on the files it reads: unchanged files are not searched again.
+		// The rendered workflows are not searched: sync-check holds them to the
+		// CUE they come from.
 		whitespace: #Check & {
 			command: "bash"
-			inputs: [".github/workflows/*.yml", "deploy/stargate/scripts/*", "tools/ci/*.sh", "tools/workflows/*/*.sh"]
+			inputs: [".github/workflows/scenario-publish*.yml", "deploy/stargate/scripts/*", "tools/ci/*.sh", "tools/workflows/*/*.sh"]
 			args: ["-euo", "pipefail", "-c", """
 				if git grep -nI --untracked -E '[[:blank:]]+$' -- \\
-				  '.github/workflows/*.yml' \\
+				  '.github/workflows/scenario-publish.yml' \\
+				  '.github/workflows/scenario-publish-image.yml' \\
 				  'deploy/stargate/scripts/*' \\
 				  'tools/ci/*.sh' \\
 				  'tools/workflows/*/*.sh'; then
-				  echo 'Trailing whitespace found in a workflow or a host script.' >&2
+				  echo 'Trailing whitespace found in a hand-written workflow or a host script.' >&2
 				  exit 1
 				fi
 				"""]
