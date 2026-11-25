@@ -16,6 +16,14 @@ import (
 
 #Cargo: #Host & {command: "cargo"}
 
+// A deterministic check that only reads the checkout: cuenv keys its result on
+// the declared inputs and reuses it. `sandbox: "none"` keeps it in the live
+// checkout, so a check that reads git state still sees it.
+#Check: schema.#Task & {
+	hermetic: sandbox: "none"
+	cache: mode: "read-write"
+}
+
 // A bash body. Values reach it as positional arguments, never as source text.
 #Bash: #Host & {
 	_script: string
@@ -24,20 +32,19 @@ import (
 	args: list.Concat([["-euo", "pipefail", "-c", _script, "cuenv-task"], _argv])
 }
 
-// Runs tasks in order through `cuenv task`, stopping at the first failure.
-#InOrder: #Bash & {
-	_steps: [...string]
-	_script: """
-		for step in "$@"; do
-		  cuenv task "$step"
-		done
-		"""
-	_argv: _steps
-}
-
 schema.#Project & {
 	name: "intar"
 	let _t = tasks
+	// A task by the name `cuenv task` takes: "verify", or "test.js" for a
+	// group's child.
+	let _task = {
+		#name: string
+		let parts = strings.Split(#name, ".")
+		out: [
+			if len(parts) == 1 {_t[#name]},
+			if len(parts) == 2 {_t[parts[0]][parts[1]]},
+		][0]
+	}
 	let _checkGenerated = [
 		_t."generate-contracts",
 		#Host & {command: "git", args: ["diff", "--exit-code", "--", "apps/web/src/generated"]},
@@ -147,7 +154,7 @@ schema.#Project & {
 			"""}
 		generate: [_t."generate-contracts"]
 		"check-generated-contracts": _checkGenerated
-		"check-generated": _checkGenerated
+		"check-generated": _t."check-generated-contracts"
 		"clean-generated": #Host & {command: "bun", args: ["run", "clean:generated"]}
 
 		"build-kino-guest": #Cargo & {args: ["zigbuild", "--profile", "guest", "-p", "kino", "--target", "x86_64-unknown-linux-musl"]}
@@ -184,16 +191,21 @@ schema.#Project & {
 			done
 			"""}
 
-		whitespace: #Bash & {_script: """
-			if git grep -nI -E '[[:blank:]]+$' -- \\
-			  '.github/workflows/*.yml' \\
-			  'deploy/stargate/scripts/*' \\
-			  'tools/ci/*.sh' \\
-			  'tools/workflows/*/*.sh'; then
-			  echo 'Trailing whitespace found in a workflow or a host script.' >&2
-			  exit 1
-			fi
-			"""}
+		// Cached on the files it reads: unchanged files are not searched again.
+		whitespace: #Check & {
+			command: "bash"
+			inputs: [".github/workflows/*.yml", "deploy/stargate/scripts/*", "tools/ci/*.sh", "tools/workflows/*/*.sh"]
+			args: ["-euo", "pipefail", "-c", """
+				if git grep -nI --untracked -E '[[:blank:]]+$' -- \\
+				  '.github/workflows/*.yml' \\
+				  'deploy/stargate/scripts/*' \\
+				  'tools/ci/*.sh' \\
+				  'tools/workflows/*/*.sh'; then
+				  echo 'Trailing whitespace found in a workflow or a host script.' >&2
+				  exit 1
+				fi
+				"""]
+		}
 
 		// A relative link in a tracked Markdown file must name a file that exists.
 		"md-links": #Host & {command: "bun", args: ["tools/ci/check-md-links.ts"]}
@@ -236,13 +248,15 @@ schema.#Project & {
 
 		// The CI lanes in ci/workflows/lanes.cue: `cuenv task lanes.<name>` runs
 		// the steps of that lane's ci.yml job, and `cuenv task ci` runs every lane.
+		// Each is a sequence, so one cuenv process runs a lane's steps in order and
+		// stops at the first failure.
 		lanes: {
 			type: "group"
 			for name, lane in workflows.lanes {
-				(name): #InOrder & {_steps: lane.steps}
+				(name): [for step in lane.steps {(_task & {#name: step}).out}]
 			}
 		}
-		ci: #InOrder & {_steps: [for name, _ in workflows.lanes {"lanes.\(name)"}]}
+		ci: [for name, _ in workflows.lanes {_t.lanes[name]}]
 
 		// ci.yml's changes job: which lanes a pull request needs.
 		"ci-changes": #Host & {
