@@ -35,44 +35,6 @@ import (
 	_argv: _steps
 }
 
-// .github/dependabot.yml. The two scenario-publish workflows are hand-written
-// and Dependabot keeps them current; everything rendered is excluded.
-_dependabot: strings.Join([
-	"# Generated from env.cue by cuenv; do not edit manually.",
-	"# Regenerate with: cuenv sync codegen",
-	"#",
-	"# Action pins are the supply-chain boundary for CI. Dependabot proposes the",
-	"# next pinned revision, and a human reviews the version comment with it.",
-	"# `directory: \"/\"` scans only .github/workflows and a root action.yml, so the",
-	"# composite actions under .github/actions are listed as well.",
-	"# Every workflow but scenario-publish.yml and scenario-publish-image.yml is",
-	"# rendered by cuenv, so Dependabot skips them to keep the grouped proposal",
-	"# mergeable. Their pins are also listed in a scanned file, which the workflow",
-	"# policy enforces (see .github/actions/workflow-pins). When Dependabot bumps",
-	"# one, replace its SHA and tag in ci/gha/pins.cue in the same pull request,",
-	"# then run `cuenv sync codegen`.",
-	"version: 2",
-	"updates:",
-	"  - package-ecosystem: github-actions",
-	"    directories:",
-	"      - \"/\"",
-	"      - \"/.github/actions/*\"",
-	"    exclude-paths:",
-	for path, _ in workflows.files {"      - \"\(path)\""},
-	"    schedule:",
-	"      interval: weekly",
-	"    # The pr-title check requires a Conventional Commit title with one",
-	"    # scope: \"ci(deps): bump ...\".",
-	"    commit-message:",
-	"      prefix: ci",
-	"      include: scope",
-	"    groups:",
-	"      actions:",
-	"        patterns:",
-	"          - \"*\"",
-	"",
-], "\n")
-
 schema.#Project & {
 	name: "intar"
 	let _t = tasks
@@ -88,10 +50,6 @@ schema.#Project & {
 		for path, rendered in workflows.files {
 			(path): gen.#YAMLFile & {content: rendered, gitignore: false}
 		}
-		// Dependabot skips every rendered workflow, so its exclude-paths come
-		// from the list the renderer uses. `cuenv sync codegen --check` catches
-		// a workflow added without an exclusion.
-		".github/dependabot.yml": gen.#YAMLFile & {content: _dependabot, gitignore: false}
 	}
 
 	tasks: {
@@ -248,8 +206,8 @@ schema.#Project & {
 		actionlint: #Host & {command: "tools/ci/actionlint.sh"}
 
 		// Rendered workflows must match ci/workflows. The codegen check compares
-		// only the files it renders, so a leftover or hand-written workflow is
-		// caught here.
+		// only the files it renders, so a leftover or hand-written workflow, or a
+		// rendered one Dependabot would edit, is caught here.
 		"sync-check": #Bash & {
 			_script: """
 				cuenv sync codegen --check
@@ -260,6 +218,15 @@ schema.#Project & {
 				  echo 'Every workflow must be rendered by cuenv or be scenario-publish.yml or scenario-publish-image.yml.' >&2
 				  exit 1
 				fi
+				for path in "$@"; do
+				  if [[ "${path}" == */scenario-publish.yml || "${path}" == */scenario-publish-image.yml ]]; then
+				    continue
+				  fi
+				  if ! grep -qF -- "- \\"${path}\\"" .github/dependabot.yml; then
+				    echo "${path} must be in the exclude-paths of .github/dependabot.yml." >&2
+				    exit 1
+				  fi
+				done
 				"""
 			_argv: list.Concat([
 				[for path, _ in workflows.files {path}],
