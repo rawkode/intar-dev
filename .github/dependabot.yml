@@ -1,12 +1,13 @@
+# Generated from env.cue by cuenv; do not edit manually.
+# Regenerate with: cuenv sync codegen
+#
 # Action pins are the supply-chain boundary for CI. Dependabot proposes the
 # next pinned revision, and a human reviews the version comment with it.
 # `directory: "/"` scans only .github/workflows and a root action.yml, so the
 # composite actions under .github/actions are listed as well.
-# Every workflow except scenario-publish.yml and scenario-publish-image.yml is
-# rendered by cuenv, and
-# `cuenv task sync-check` rejects a hand edit, so Dependabot skips them to keep
-# the grouped proposal mergeable; sync-check also requires each rendered file
-# below. Their pins are also listed in a scanned file, which the workflow
+# Every workflow but scenario-publish.yml and scenario-publish-image.yml is
+# rendered by cuenv, so Dependabot skips them to keep the grouped proposal
+# mergeable. Their pins are also listed in a scanned file, which the workflow
 # policy enforces (see .github/actions/workflow-pins). When Dependabot bumps
 # one, replace its SHA and tag in ci/gha/pins.cue in the same pull request,
 # then run `cuenv sync codegen`.
@@ -18,12 +19,12 @@ updates:
       - "/.github/actions/*"
     exclude-paths:
       - ".github/workflows/ci.yml"
+      - ".github/workflows/pr-title.yml"
       - ".github/workflows/deploy.yml"
-      - ".github/workflows/release.yml"
       - ".github/workflows/image-ops.yml"
       - ".github/workflows/kernel.yml"
       - ".github/workflows/qemu.yml"
-      - ".github/workflows/pr-title.yml"
+      - ".github/workflows/release.yml"
     schedule:
       interval: weekly
     # The pr-title check requires a Conventional Commit title with one

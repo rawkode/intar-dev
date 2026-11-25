@@ -16,7 +16,7 @@ import (
 // Those two stay hand-written: callers pin scenario-publish.yml by tag or
 // commit, and both paths are part of the OIDC allowlist in
 // apps/web/src/lib/github-oidc.ts.
-workflows: [Name=string]: gha.#Workflow
+workflows: [string]: gha.#Workflow
 
 // The workflow policy requires each pin's tag as a comment, and YAML rendering
 // drops comments, so the renderer writes it back from ci/gha/pins.cue.

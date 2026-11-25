@@ -256,8 +256,8 @@ jobs:
       app: ${{ steps.lanes.outputs.app == 'true' }}
       docs: ${{ steps.lanes.outputs.docs == 'true' || steps.lanes.outputs.docs_touched == 'true' }}
       web_inputs: ${{ steps.inputs.outputs.web }}
-      docs_inputs: ${{ steps.inputs.outputs.docs }}
       web_touched: ${{ steps.lanes.outputs.web_touched }}
+      docs_inputs: ${{ steps.inputs.outputs.docs }}
       base: ${{ steps.lanes.outputs.base }}
     permissions:
       contents: read
